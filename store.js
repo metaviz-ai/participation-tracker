@@ -100,6 +100,21 @@ function makeCtx() {
   return { ts, reset: () => { n = 0; }, uid: (p) => `${p}${seed}${n++}` };
 }
 
+/* Duplicate-submission guard. The same TA recording the same thing for the same
+   student twice within a moment is a repeated click, not two contributions —
+   a student really contributing twice takes longer than this to do it.
+   Compares against ctx.ts rather than the clock so the local run and the
+   authoritative re-run inside persist() reach the same verdict. */
+const DUP_WINDOW_MS = 2500;
+function justRecorded(st, ctx, studentId, typeKey, taId) {
+  const at = new Date(ctx.ts).getTime();
+  return st.cpEvents.some((e) => {
+    if (e.studentId !== studentId || e.typeKey !== typeKey || e.taId !== taId) return false;
+    const gap = at - new Date(e.ts).getTime();
+    return gap >= 0 && gap < DUP_WINDOW_MS;
+  });
+}
+
 export function fmtDate(iso) {
   const d = new Date(iso.length <= 10 ? iso + "T00:00:00" : iso);
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
@@ -519,6 +534,8 @@ export function markCp(handRaiseId, contributionKey, taId) {
     if (hr.status === "MARKED" || st.cpEvents.some((e) => e.handRaiseId === hr.id))
       return { error: `Already marked by ${taName(hr.markedBy)}.` };
     if (hr.status === "CANCELLED") return { error: "That hand was lowered — cannot mark it." };
+    if (justRecorded(st, ctx, hr.studentId, c.key, taId))
+      return { error: "That contribution was just recorded — ignoring the repeated click." };
     st.scores[s.id] = st.scores[s.id] || {};
     const prev = st.scores[s.id][hr.studentId] || 0;
     const next = clampScore(prev + c.points);
@@ -546,6 +563,8 @@ export function applyPenalty(studentId, penaltyKey, taId) {
     const s = todaySession(st);
     if (!s) return { error: "Class has not started yet." };
     if (s.status === "CLOSED") return { error: "Class is closed — no new CP changes." };
+    if (justRecorded(st, c, studentId, p.key, taId))
+      return { error: "That penalty was just applied — ignoring the repeated click." };
     st.scores[s.id] = st.scores[s.id] || {};
     const prev = st.scores[s.id][studentId] || 0;
     const next = clampScore(prev + p.points);

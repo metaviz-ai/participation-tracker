@@ -462,10 +462,41 @@ class Component extends DCLogic {
       this.unsubErr = S.onPersistError((msg) =>
         this.flash(`Not saved to the shared database (${msg}). Check your connection, then try again.`, "error"));
       this.timer = setInterval(() => this.setState((s) => ({ tick: s.tick + 1 })), 1000);
-      this.setState({ ready: true, warnings: cfg.warnings });
+      const back = this.restoreSession(S);
+      this.setState({
+        ready: true, warnings: cfg.warnings,
+        ...(back ? { user: back, view: back.role === "ta" ? "ta" : "student" } : {}),
+      });
     });
   }
   componentWillUnmount() { this.unsub && this.unsub(); this.unsubErr && this.unsubErr(); clearInterval(this.timer); }
+
+  /* ---- staying signed in across a refresh ---- */
+  /* A phone that locks mid-class, or an accidental reload, used to drop the
+     person back to the sign-in screen. Only the identity is kept; the roster is
+     re-checked on the way back in, so someone removed from the class cannot
+     restore a session. Expires overnight so a shared lab machine doesn't stay
+     signed in. */
+  SESSION_KEY = "cp-session-v1";
+  SESSION_MAX_AGE = 12 * 60 * 60 * 1000;
+
+  saveSession(user) {
+    try {
+      localStorage.setItem(this.SESSION_KEY, JSON.stringify({ role: user.role, id: user.id, ts: Date.now() }));
+    } catch (e) { /* private window — the session just won't survive a refresh */ }
+  }
+  clearSession() {
+    try { localStorage.removeItem(this.SESSION_KEY); } catch (e) {}
+  }
+  restoreSession(S) {
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(this.SESSION_KEY) || "null"); } catch (e) { return null; }
+    if (!saved || !saved.id || !saved.ts) return null;
+    if (Date.now() - saved.ts > this.SESSION_MAX_AGE) { this.clearSession(); return null; }
+    const p = saved.role === "ta" ? S.taById(saved.id) : S.studentById(saved.id);
+    if (!p) { this.clearSession(); return null; }
+    return { role: saved.role, id: p.id, name: p.name, username: p.username };
+  }
 
   flash(msg, kind) {
     this.setState({ flash: msg, flashKind: kind || "info" });
@@ -493,12 +524,16 @@ class Component extends DCLogic {
     const pass = String(this.state.password || "").trim();
     const r = this.S.login(role, uname, pass);
     if (r.error) return this.setState({ loginError: r.error });
+    this.saveSession(r.user);
     this.setState({
       user: r.user, view: r.user.role === "ta" ? "ta" : "student",
       loginError: "", password: "", tab: "dashboard",
     });
   };
-  signOut = () => this.setState({ user: null, view: "login", username: "", password: "", modal: null });
+  signOut = () => {
+    this.clearSession();
+    this.setState({ user: null, view: "login", username: "", password: "", modal: null });
+  };
 
   /* ---- marking ---- */
   openMark = (studentId, handRaiseId) => {
@@ -508,34 +543,59 @@ class Component extends DCLogic {
     this.setState({ modal: { studentId, handRaiseId: handRaiseId || null, result: null, error: "" } });
   };
 
+  /* One click, one record. `_busy` is a plain instance field on purpose: React
+     batches setState, so a second click can still read the previous render's
+     modal — a flag held in component state would not stop it. The store also
+     rejects an identical repeat within a few seconds, so a stray click cannot
+     get through from anywhere else either. */
+  _guard() {
+    if (this._busy) return false;
+    this._busy = true;
+    clearTimeout(this._bt);
+    this._bt = setTimeout(() => { this._busy = false; }, 400);
+    return true;
+  }
+  closeAfterResult() {
+    clearTimeout(this._mt);
+    this._mt = setTimeout(() => this.setState((s) => (s.modal ? { modal: null } : {})), 1600);
+  }
+
   award = (key) => {
     const m = this.state.modal;
-    if (!m) return;
+    if (!m || !this._guard()) return;
     const S = this.S, taId = this.state.user.id;
     let hrId = m.handRaiseId;
     if (!hrId) {
       const hands = S.activeHands(this.todaySes().id).filter((h) => h.studentId === m.studentId);
       if (hands.length) hrId = hands[0].id;
     }
+    let opened = null;
     if (!hrId) {
       /* No live hand: record the contribution against a fresh hand raise so the
          one-event-per-raise constraint still holds. */
       const r = S.raiseHand(m.studentId);
       if (r.error) return this.setState({ modal: { ...m, error: r.error } });
       hrId = r.handRaiseId;
+      opened = m.studentId;
     }
     const res = S.markCp(hrId, key, taId);
-    if (res.error) return this.setState({ modal: { ...m, error: res.error, result: null } });
+    if (res.error) {
+      /* Don't strand the hand raise we just opened — it would show up in the
+         queue as a student waiting who never raised their hand. */
+      if (opened) S.cancelHand(opened);
+      return this.setState({ modal: { ...m, error: res.error, result: null } });
+    }
     this.setState({ modal: { ...m, handRaiseId: hrId, error: "", result: { prev: res.prev, points: (res.points >= 0 ? "+" : "") + res.points, next: res.next } } });
-    clearTimeout(this._mt);
-    this._mt = setTimeout(() => this.setState((s) => (s.modal ? { modal: null } : {})), 1600);
+    this.closeAfterResult();
   };
 
   penalise = (key) => {
     const m = this.state.modal;
+    if (!m || !this._guard()) return;
     const res = this.S.applyPenalty(m.studentId, key, this.state.user.id);
     if (res.error) return this.setState({ modal: { ...m, error: res.error, result: null } });
     this.setState({ modal: { ...m, error: "", result: { prev: res.prev, points: res.points, next: res.next } } });
+    this.closeAfterResult();
   };
 
   /* ---- seating editor ---- */
