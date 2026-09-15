@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Class Participation Marking · Topics Course</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #F2F1EC; color: #17191C;
+    font-family: "Instrument Sans", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  button { font-family: inherit; cursor: pointer; }
+  input { font-family: inherit; }
+  a { color: #0B6B52; text-decoration: none; }
+  a:hover { color: #094C3A; text-decoration: underline; }
+  @keyframes cpPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(180,114,11,.35); } 50% { box-shadow: 0 0 0 6px rgba(180,114,11,0); } }
+  @keyframes cpRise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+</style>
+</helmet>
+
+<div style="min-height: 100vh; display: flex; flex-direction: column;">
+
+  <sc-if value="{{ isLogin }}" hint-placeholder-val="{{ true }}">
+    <div style="flex: 1; display: flex; flex-wrap: wrap; align-items: stretch; min-height: 100vh;">
+      <div style="flex: 1 1 380px; background: #17191C; color: #F2F1EC; padding: 56px 48px; display: flex; flex-direction: column; justify-content: space-between; gap: 40px;">
+        <div style="font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: #9A9C96;">Topics Course · Fall 2026</div>
+        <div>
+          <h1 style="font-family: 'Instrument Serif', serif; font-weight: 400; font-size: 58px; line-height: 1.02; margin: 0 0 18px;">Class<br />Participation<br />Marking</h1>
+          <p style="margin: 0; max-width: 34ch; color: #B9BBB4; font-size: 15px; line-height: 1.6;">Live seating plan, digital hands, fair recommendations, and one-click CP marking for three TAs at once.</p>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px; font-size: 13px; color: #9A9C96;">
+          <div>38 students · 3 teaching assistants</div>
+          <button onClick="{{ openPresenter }}" style="align-self: flex-start; background: none; border: 1px solid #3A3D40; color: #F2F1EC; padding: 10px 16px; border-radius: 8px; font-size: 13px;" style-hover="background: #232629;">Open presenter display →</button>
+        </div>
+      </div>
+
+      <div style="flex: 1 1 420px; display: flex; align-items: center; justify-content: center; padding: 48px 32px;">
+        <div style="width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: 20px;">
+          <div style="display: flex; gap: 4px; padding: 4px; background: #E7E5DE; border-radius: 10px;">
+            <button onClick="{{ pickTa }}" style="{{ taTabStyle }}">Teaching assistant</button>
+            <button onClick="{{ pickStudent }}" style="{{ studentTabStyle }}">Student</button>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <label style="font-size: 12px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; color: #6E7079;">Username</label>
+            <input value="{{ username }}" onChange="{{ onUsername }}" onKeyDown="{{ onLoginKey }}" placeholder="abdul.ali" style="padding: 13px 14px; border: 1px solid #D8D6CD; border-radius: 9px; font-size: 15px; background: #FFF; outline: none;" />
+            <label style="font-size: 12px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; color: #6E7079;">Password</label>
+            <input value="{{ password }}" onChange="{{ onPassword }}" onKeyDown="{{ onLoginKey }}" type="password" placeholder="••••••" style="padding: 13px 14px; border: 1px solid #D8D6CD; border-radius: 9px; font-size: 15px; background: #FFF; outline: none;" />
+          </div>
+          <sc-if value="{{ loginError }}" hint-placeholder-val="{{ false }}">
+            <div style="background: #FBEDEB; border: 1px solid #EBC9C4; color: #8E2F27; padding: 10px 12px; border-radius: 8px; font-size: 13px;">{{ loginError }}</div>
+          </sc-if>
+          <button onClick="{{ submitLogin }}" style="background: #0B6B52; color: #FFF; border: none; padding: 14px; border-radius: 9px; font-size: 15px; font-weight: 600;" style-hover="background: #095440;">Sign in</button>
+          <div style="border-top: 1px solid #E2E0D8; padding-top: 16px; display: flex; flex-direction: column; gap: 10px;">
+            <div style="font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: #6E7079;">Quick sign in</div>
+            <div style="font-size: 12.5px; color: #6E7079; margin: -4px 0 2px;">Pick your name, then enter your password.</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+              <sc-for list="{{ quickTas }}" as="t" hint-placeholder-count="3">
+                <button onClick="{{ t.onClick }}" style="background: #FFF; border: 1px solid #D8D6CD; padding: 9px 12px; border-radius: 8px; font-size: 13px;" style-hover="background: #F6F5F1; border-color: #0B6B52;">{{ t.name }}</button>
+              </sc-for>
+            </div>
+            <select value="{{ quickStudentValue }}" onChange="{{ onQuickStudent }}" style="padding: 11px 12px; border: 1px solid #D8D6CD; border-radius: 9px; font-size: 14px; background: #FFF;">
+              <option value="">Pick a student…</option>
+              <sc-for list="{{ studentOptions }}" as="o" hint-placeholder-count="6">
+                <option value="{{ o.username }}">{{ o.name }}</option>
+              </sc-for>
+            </select>
+          </div>
+          <sc-if value="{{ hasWarnings }}" hint-placeholder-val="{{ false }}">
+            <div style="background: #FDF5E4; border: 1px solid #EDD9A8; color: #7A5A12; padding: 10px 12px; border-radius: 8px; font-size: 12.5px;">Setup notice: {{ warningText }}</div>
+          </sc-if>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isTa }}" hint-placeholder-val="{{ false }}">
+    <div style="flex: 1; display: flex; flex-direction: column;">
+      <header style="background: #FFF; border-bottom: 1px solid #E2E0D8; padding: 14px 22px; display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 20;">
+        <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;">
+          <div style="font-family: 'Instrument Serif', serif; font-size: 22px;">Topics Course</div>
+          <div style="font-size: 13px; color: #6E7079;">{{ dateLabel }}</div>
+          <div style="{{ statusPillStyle }}">{{ statusLabel }}</div>
+        </div>
+        <div style="display: flex; gap: 22px; align-items: center; flex-wrap: wrap;">
+          <div style="display: flex; gap: 22px; font-variant-numeric: tabular-nums;">
+            <div><div style="font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #6E7079;">Hands</div><div style="font-size: 19px; font-weight: 600; color: #B4720B;">{{ handsCount }}</div></div>
+            <div><div style="font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #6E7079;">Participated</div><div style="font-size: 19px; font-weight: 600;">{{ participatingCount }}</div></div>
+            <div><div style="font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #6E7079;">Avg CP</div><div style="font-size: 19px; font-weight: 600;">{{ avgCp }}</div></div>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <sc-if value="{{ showStart }}" hint-placeholder-val="{{ true }}">
+              <button onClick="{{ startClass }}" style="background: #0B6B52; color: #FFF; border: none; padding: 10px 16px; border-radius: 8px; font-size: 14px; font-weight: 600;" style-hover="background: #095440;">{{ startLabel }}</button>
+            </sc-if>
+            <button onClick="{{ doExport }}" style="background: #FFF; border: 1px solid #D8D6CD; padding: 10px 14px; border-radius: 8px; font-size: 14px;" style-hover="background: #F6F5F1;">Export</button>
+            <sc-if value="{{ canEnd }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ askEnd }}" style="background: #FFF; border: 1px solid #E0BCB6; color: #8E2F27; padding: 10px 14px; border-radius: 8px; font-size: 14px; font-weight: 500;" style-hover="background: #FBEDEB;">End class</button>
+            </sc-if>
+            <sc-if value="{{ canReopen }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ reopen }}" style="background: #FFF; border: 1px solid #D8D6CD; padding: 10px 14px; border-radius: 8px; font-size: 14px;" style-hover="background: #F6F5F1;">Reopen</button>
+            </sc-if>
+          </div>
+        </div>
+      </header>
+
+      <nav style="background: #FFF; border-bottom: 1px solid #E2E0D8; padding: 0 22px; display: flex; gap: 4px; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+        <div style="display: flex; gap: 4px;">
+          <sc-for list="{{ tabs }}" as="tab" hint-placeholder-count="4">
+            <button onClick="{{ tab.onClick }}" style="{{ tab.style }}">{{ tab.label }}</button>
+          </sc-for>
+        </div>
+        <div style="display: flex; gap: 12px; align-items: center; font-size: 13px; color: #6E7079; padding: 8px 0;">
+          <span>{{ taLine }}</span>
+          <button onClick="{{ signOut }}" style="background: none; border: none; color: #6E7079; font-size: 13px; text-decoration: underline;">Sign out</button>
+        </div>
+      </nav>
+
+      <sc-if value="{{ flash }}" hint-placeholder-val="{{ false }}">
+        <div style="{{ flashStyle }}">{{ flash }}</div>
+      </sc-if>
+
+      <sc-if value="{{ tabDashboard }}" hint-placeholder-val="{{ true }}">
+        <div style="flex: 1; display: flex; flex-wrap: wrap; gap: 18px; padding: 18px 22px 40px; align-items: flex-start;">
+          <section style="flex: 3 1 560px; min-width: 0; background: #FFF; border: 1px solid #E2E0D8; border-radius: 14px; padding: 18px;">
+            <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 16px;">
+              <div style="flex: 1; height: 1px; background: #E2E0D8;"></div>
+              <div style="font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: #6E7079;">Front / Screen</div>
+              <div style="flex: 1; height: 1px; background: #E2E0D8;"></div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <sc-for list="{{ seatRows }}" as="row" hint-placeholder-count="6">
+                <div style="display: flex; gap: 10px;">
+                  <sc-for list="{{ row.cells }}" as="cell" hint-placeholder-count="7">
+                    <button onClick="{{ cell.onClick }}" style="{{ cell.style }}">
+                      <span style="{{ cell.nameStyle }}">{{ cell.name }}</span>
+                      <span style="{{ cell.metaStyle }}">{{ cell.meta }}</span>
+                      <span style="{{ cell.badgeStyle }}">{{ cell.badge }}</span>
+                    </button>
+                  </sc-for>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display: flex; gap: 18px; flex-wrap: wrap; margin-top: 18px; padding-top: 14px; border-top: 1px solid #E2E0D8; font-size: 12px; color: #6E7079;">
+              <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 10px; height: 10px; border-radius: 3px; background: #FFF6E8; border: 2px solid #B4720B;"></span>Hand raised</span>
+              <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 10px; height: 10px; border-radius: 3px; background: #EEF6F2; border: 2px solid #0B6B52;"></span>Recommended</span>
+              <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 10px; height: 10px; border-radius: 3px; background: #F1F2FE; border: 2px solid #3A4BC8;"></span>Selected</span>
+              <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 10px; height: 10px; border-radius: 3px; background: #EDECE7; border: 1px solid #C9C7BE;"></span>Marked this class</span>
+            </div>
+          </section>
+
+          <aside style="flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 14px;">
+            <sc-if value="{{ showRec }}" hint-placeholder-val="{{ true }}">
+              <div style="background: #FFF; border: 1px solid #E2E0D8; border-radius: 14px; overflow: hidden;">
+                <div style="padding: 14px 16px; border-bottom: 1px solid #E2E0D8; display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: #6E7079;">Active hands</span>
+                  <span style="font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums;">{{ handsCount }}</span>
+                </div>
+                <sc-if value="{{ recommended }}" hint-placeholder-val="{{ true }}">
+                  <div style="padding: 16px; background: #F4F9F6; border-bottom: 1px solid #E2E0D8; animation: cpRise .2s ease;">
+                    <div style="font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #0B6B52; font-weight: 600; margin-bottom: 8px;">★ Recommended</div>
+                    <div style="font-size: 21px; font-weight: 600; margin-bottom: 4px;">{{ recommended.name }}</div>
+                    <div style="font-size: 13px; color: #47505A; line-height: 1.5; margin-bottom: 12px;">{{ recommended.reason }}</div>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                      <button onClick="{{ recommended.onMark }}" style="background: #0B6B52; color: #FFF; border: none; padding: 10px 14px; border-radius: 8px; font-size: 13.5px; font-weight: 600;" style-hover="background: #095440;">Mark CP</button>
+                      <button onClick="{{ recommended.onSelect }}" style="background: #FFF; border: 1px solid #D8D6CD; padding: 10px 14px; border-radius: 8px; font-size: 13.5px;" style-hover="background: #F6F5F1;">Mark as called</button>
+                    </div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ queueEmpty }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding: 24px 16px; text-align: center; color: #8A8C85; font-size: 13.5px;">{{ emptyQueueText }}</div>
+                </sc-if>
+                <sc-for list="{{ queueOthers }}" as="q" hint-placeholder-count="3">
+                  <div style="padding: 12px 16px; border-bottom: 1px solid #EFEEE9; display: flex; align-items: center; gap: 10px;">
+                    <div style="flex: 1; min-width: 0;">
+                      <div style="font-size: 14.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ q.name }}</div>
+                      <div style="font-size: 12px; color: #6E7079;">waiting {{ q.waitLabel }} · {{ q.qualitative }}</div>
+                    </div>
+                    <button onClick="{{ q.onMark }}" style="background: #FFF; border: 1px solid #D8D6CD; padding: 7px 11px; border-radius: 7px; font-size: 12.5px; white-space: nowrap;" style-hover="background: #F6F5F1;">Mark</button>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <div style="background: #FFF; border: 1px solid #E2E0D8; border-radius: 14px; padding: 14px 16px;">
+              <div style="font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: #6E7079; margin-bottom: 10px;">Recent activity</div>
+              <sc-for list="{{ recentFeed }}" as="r" hint-placeholder-count="5">
+                <div style="display: flex; gap: 10px; padding: 7px 0; border-bottom: 1px solid #F1F0EB; font-size: 13px;">
+                  <span style="color: #8A8C85; font-variant-numeric: tabular-nums; white-space: nowrap;">{{ r.time }}</span>
+                  <span style="flex: 1; min-width: 0; color: #35383D;">{{ r.text }}</span>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="background: #FFF; border: 1px solid #E2E0D8; border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px;">
+              <div style="font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: #6E7079;">TAs in this session</div>
+              <sc-for list="{{ sessionTas }}" as="t" hint-placeholder-count="3">
+                <div style="font-size: 13.5px; display: flex; align-items: center; gap: 8px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #0B6B52;"></span>{{ t.name }}</div>
+              </sc-for>
+              <button onClick="{{ openPresenter }}" style="margin-top: 6px; background: none; border: 1px solid #D8D6CD; padding: 9px 12px; border-radius: 8px; font-size: 13px;" style-hover="background: #F6F5F1;">Open presenter display</button>
+            </div>
+          </aside>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ tabSeating }}" hint-placeholder-val="{{ false }}">
+        <div style="padding: 18px 22px 40px; display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start;">
+          <section style="flex: 3 1 560px; min-width: 0; background: #FFF; border: 1px solid #E2E0D8; border-radius: 14px; padding: 18px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px;">
+              <div>
+                <div style="font-size: 17px; font-weight: 600;">Seating plan editor</div>
+                <div style="font-size: 13px; color: #6E7079;">Drag a student onto any seat. Drop onto the tray to unseat.</div>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button onClick="{{ addRow }}" style="background: #FFF; border: 1px solid #D8D6CD; padding: 9px 13px; border-radius: 8px; font-size: 13.5px;" style-hover="background: #F6F5F1;">+ Row</button>
+                <button onClick="{{ addSeat }}" style="background: #FFF; border: 1px solid #D8D6CD; padding: 9px 13px; border-radius: 8px; font-size: 13.5px;" style-hover="background: #F6F5F1;">+ Seat per row</button>
+                <button onClick="{{ removeSeat }}" style="background: #FFF; border: 1px solid #D8D6CD; padding: 9px 13px; border-radius: 8px; font-size: 13.5px;" style-hover="background: #F6F5F1;">− Seat</button>
+                <button onClick="{{ saveSeatingPlan }}" style="background: #0B6B52; color: #FFF; border: none; padding: 9px 15px; border-radius: 8px; font-size: 13.5px; font-weight: 600;" style-hover="background: #095440;">Save plan</button>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 14px;">
+              <div style="flex: 1; height: 1px; background: #E2E0D8;"></div>
+              <div style="font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: #6E7079;">Front / Screen</div>
+              <div style="flex: 1; height: 1px; background: #E2E0D8;"></div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <sc-for list="{{ editRows }}" as="row" hint-placeholder-count="6">
+                <div style="display: flex; gap: 10px; align-items: stretch;">
+                  <sc-for list="{{ row.cells }}" as="cell" hint-placeholder-count="7">
+                    <div draggable="{{ cell.draggable }}" onDragStart="{{ cell.onDragStart }}" onDragOver="{{ cell.onDragOver }}" onDrop="{{ cell.onDrop }}" style="{{ cell.style }}"><span style="min-width: 0; overflow-wrap: anywhere;">{{ cell.name }}</span></div>
+                  </sc-for>
+                  <button onClick="{{ row.onRemove }}" style="border: 1px dashed #D8D6CD; background: none; color: #8A8C85; border-radius: 9px; padding: 0 10px; font-size: 13px;" style-hover="background: #FBEDEB; color: #8E2F27;">×</button>
+                </div>
+              </sc-for>
+            </div>
+          </section>
+          <aside onDragOver="{{ trayDragOver }}" onDrop="{{ trayDrop }}" style="flex: 1 1 280px; min-width: 0; background: #FFF; border: 1px solid #E2E0D8; border-radius: 14px; padding: 16px;">
+            <div style="font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: #6E7079; margin-bottom: 4px;">Unseated students</div>
+            <div style="font-size: 12.5px; color: #8A8C85; margin-bottom: 12px;">{{ unseatedCount }} waiting for a seat</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+              <sc-for list="{{ unseated }}" as="u" hint-placeholder-count="4">
+                <div draggable="{{ true }}" onDragStart="{{ u.onDragStart }}" style="border: 1px solid #D8D6CD; border-radius: 8px; padding: 8px 10px; font-size: 13px; background: #FAF9F6; cursor: grab;">{{ u.name }}</div>
+              </sc-for>
+            </div>
+          </aside>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ tabHistory }}" hint-placeholder-val="{{ false }}">
+        <div style="padding: 18px 22px 40px;">
+          <section style="background: #FFF; border: 1px solid #E2E0D8; border-radius: 14px; overflow: hidden;">
+            <div style="padding: 16px 18px; border-bottom: 1px solid #E2E0D8; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+              <div style="font-size: 17px; font-weight: 600;">Participation history</div>
+              <div style="font-size: 13px; color: #6E7079;">{{ historyCount }} events across all sessions</div>
+            </div>
+            <div style="display: flex; padding: 10px 18px; background: #FAF9F6; border-bottom: 1px solid #E2E0D8; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #6E7079; gap: 12px;">
+              <span style="flex: 0 0 150px;">Date / time</span>
+              <span style="flex: 2 1 0; min-width: 0;">Student</span>
+              <span style="flex: 3 1 0; min-width: 0;">Event</span>
+              <span style="flex: 0 0 90px; text-align: right;">Points</span>
+              <span style="flex: 0 0 90px; text-align: right;">CP</span>
+              <span style="flex: 2 1 0; min-width: 0;">Recorded by</span>
+            </div>
+            <sc-for list="{{ historyRows }}" as="h" hint-placeholder-count="8">
+              <div style="display: flex; padding: 11px 18px; border-bottom: 1px solid #F1F0EB; font-size: 13.5px; gap: 12px; align-items: center;">
+                <span style="flex: 0 0 150px; color: #6E7079; font-variant-numeric: tabular-nums;">{{ h.when }}</span>
+                <span style="flex: 2 1 0; min-width: 0; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ h.student }}</span>
+                <span style="flex: 3 1 0; min-width: 0; color: #47505A;">{{ h.label }}</span>
+                <span style="{{ h.pointsStyle }}">{{ h.points }}</span>
+                <span style="flex: 0 0 90px; text-align: right; color: #6E7079; font-variant-numeric: tabular-nums;">{{ h.transition }}</span>
+                <span style="flex: 2 1 0; min-width: 0; color: #6E7079; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ h.ta }}</span>
+              </div>
+            </sc-for>
+          </section>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ tabAudit }}" hint-placeholder-val="{{ false }}">
+        <div style="padding: 18px 22px 40px;">
+          <section style="background: #FFF; border: 1px solid #E2E0D8; border-radius: 14px; overflow: hidden;">
+            <div style="padding: 16px 18px; border-bottom: 1px solid #E2E0D8; font-size: 17px; font-weight: 600;">Audit log</div>
+            <sc-for list="{{ auditRows }}" as="a" hint-placeholder-count="10">
+              <div style="padding: 12px 18px; border-bottom: 1px solid #F1F0EB; display: flex; gap: 14px; flex-wrap: wrap; font-size: 13.5px;">
+                <span style="flex: 0 0 165px; color: #6E7079; font-variant-numeric: tabular-nums;">{{ a.when }}</span>
+                <span style="flex: 0 0 165px; font-weight: 500;">{{ a.actor }}</span>
+                <span style="flex: 2 1 220px; min-width: 0;">{{ a.action }}</span>
+                <span style="flex: 3 1 260px; min-width: 0; color: #6E7079;">{{ a.detail }}</span>
+              </div>
+            </sc-for>
+          </section>
+        </div>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isStudent }}" hint-placeholder-val="{{ false }}">
+    <div style="flex: 1; display: flex; justify-content: center; padding: 24px 16px 48px;">
+      <div style="width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <div style="font-family: 'Instrument Serif', serif; font-size: 22px;">Topics Course</div>
+            <div style="font-size: 13.5px; color: #6E7079;">{{ dateLabel }}</div>
+          </div>
+          <button onClick="{{ signOut }}" style="background: none; border: 1px solid #D8D6CD; padding: 8px 12px; border-radius: 8px; font-size: 13px; color: #6E7079;">Sign out</button>
+        </div>
+
+        <div style="{{ studentCardStyle }}">
+          <div style="font-size: 14px; color: #6E7079;">Hello,</div>
+          <div style="font-size: 26px; font-weight: 600; margin: 2px 0 18px;">{{ studentFirstName }}</div>
+          <div style="font-size: 44px; line-height: 1; margin-bottom: 10px;">{{ studentIcon }}</div>
+          <div style="font-size: 19px; font-weight: 600; margin-bottom: 6px;">{{ studentHeadline }}</div>
+          <div style="font-size: 14.5px; color: #47505A; line-height: 1.55;">{{ studentSubline }}</div>
+          <sc-if value="{{ studentPrimaryLabel }}" hint-placeholder-val="{{ true }}">
+            <button onClick="{{ studentPrimary }}" style="{{ studentPrimaryStyle }}">{{ studentPrimaryLabel }}</button>
+          </sc-if>
+          <sc-if value="{{ canCancel }}" hint-placeholder-val="{{ false }}">
+            <button onClick="{{ cancelHandAction }}" style="margin-top: 10px; width: 100%; background: none; border: 1px solid #D8D6CD; padding: 13px; border-radius: 12px; font-size: 14.5px; color: #6E7079;" style-hover="background: #F6F5F1;">Lower my hand</button>
+          </sc-if>
+        </div>
+
+        <sc-if value="{{ studentFlash }}" hint-placeholder-val="{{ false }}">
+          <div style="background: #FDF5E4; border: 1px solid #EDD9A8; color: #7A5A12; padding: 12px 14px; border-radius: 10px; font-size: 13.5px;">{{ studentFlash }}</div>
+        </sc-if>
+
+        <div style="background: #FFF; border: 1px solid #E2E0D8; border-radius: 14px; overflow: hidden;">
+          <div style="padding: 14px 16px; border-bottom: 1px solid #E2E0D8; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: #6E7079;">My participation history</div>
+          <sc-if value="{{ noHistory }}" hint-placeholder-val="{{ false }}">
+            <div style="padding: 22px 16px; text-align: center; color: #8A8C85; font-size: 13.5px;">No recorded participation yet.</div>
+          </sc-if>
+          <sc-for list="{{ myHistory }}" as="h" hint-placeholder-count="3">
+            <div style="padding: 13px 16px; border-bottom: 1px solid #F1F0EB;">
+              <div style="font-size: 14px; font-weight: 500;">{{ h.date }}</div>
+              <div style="font-size: 13px; color: #6E7079;">Question asked · Participation recorded</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isPresenter }}" hint-placeholder-val="{{ false }}">
+    <div style="flex: 1; background: #17191C; color: #F2F1EC; padding: 32px 36px 48px; display: flex; flex-direction: column; gap: 26px;">
+      <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 14px; border-bottom: 1px solid #2E3134; padding-bottom: 18px;">
+        <div style="font-size: 13px; letter-spacing: .16em; text-transform: uppercase; color: #9A9C96;">Questions — {{ handsCount }} hands raised</div>
+        <div style="display: flex; gap: 16px; align-items: center;">
+          <span style="font-size: 13px; color: #9A9C96;">{{ dateLabel }}</span>
+          <button onClick="{{ leavePresenter }}" style="background: none; border: 1px solid #3A3D40; color: #F2F1EC; padding: 8px 12px; border-radius: 8px; font-size: 13px;" style-hover="background: #232629;">Exit</button>
+        </div>
+      </div>
+      <sc-if value="{{ recommended }}" hint-placeholder-val="{{ true }}">
+        <div style="animation: cpRise .25s ease;">
+          <div style="font-size: 13px; letter-spacing: .16em; text-transform: uppercase; color: #6FCFAC; font-weight: 600; margin-bottom: 14px;">★ Recommended</div>
+          <div style="font-family: 'Instrument Serif', serif; font-size: 76px; line-height: 1; margin-bottom: 14px;">{{ recommended.name }}</div>
+          <div style="font-size: 22px; color: #C9CBC4;">“{{ recommended.qualitative }}”</div>
+        </div>
+      </sc-if>
+      <sc-if value="{{ queueEmpty }}" hint-placeholder-val="{{ false }}">
+        <div style="flex: 1; display: flex; align-items: center; justify-content: center; color: #6E7079; font-size: 22px;">{{ emptyQueueText }}</div>
+      </sc-if>
+      <sc-if value="{{ hasOthers }}" hint-placeholder-val="{{ false }}">
+        <div>
+          <div style="font-size: 13px; letter-spacing: .16em; text-transform: uppercase; color: #9A9C96; margin-bottom: 12px;">Other students waiting</div>
+          <div style="display: flex; flex-direction: column; gap: 2px;">
+            <sc-for list="{{ queueOthers }}" as="q" hint-placeholder-count="3">
+              <div style="display: flex; justify-content: space-between; gap: 16px; padding: 14px 0; border-bottom: 1px solid #2A2D30; font-size: 26px;">
+                <span>{{ q.name }}</span>
+                <span style="color: #9A9C96; font-variant-numeric: tabular-nums;">waiting {{ q.waitLabel }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ modal }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeModal }}" style="position: fixed; inset: 0; background: rgba(23,25,28,.42); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 60;">
+      <div onClick="{{ stop }}" style="width: 100%; max-width: 560px; max-height: 92vh; overflow: auto; background: #FFF; border-radius: 16px; padding: 22px; animation: cpRise .18s ease;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; margin-bottom: 18px;">
+          <div>
+            <div style="font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: #6E7079;">Record participation</div>
+            <div style="font-size: 26px; font-weight: 600; margin-top: 4px;">{{ modal.name }}</div>
+            <div style="font-size: 13.5px; color: #6E7079; margin-top: 4px;">Current CP {{ modal.scoreLabel }} · {{ modal.handLabel }}</div>
+          </div>
+          <button onClick="{{ closeModal }}" style="background: none; border: 1px solid #E2E0D8; width: 34px; height: 34px; border-radius: 9px; font-size: 16px; color: #6E7079;" style-hover="background: #F6F5F1;">×</button>
+        </div>
+
+        <sc-if value="{{ modal.result }}" hint-placeholder-val="{{ false }}">
+          <div style="background: #F4F9F6; border: 1px solid #C6E2D5; border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; display: flex; gap: 24px; flex-wrap: wrap; font-variant-numeric: tabular-nums;">
+            <div><div style="font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: #6E7079;">Previous</div><div style="font-size: 20px; font-weight: 600;">{{ modal.result.prev }}</div></div>
+            <div><div style="font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: #6E7079;">Awarded</div><div style="font-size: 20px; font-weight: 600; color: #0B6B52;">{{ modal.result.points }}</div></div>
+            <div><div style="font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: #6E7079;">New score</div><div style="font-size: 20px; font-weight: 600;">{{ modal.result.next }}</div></div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ modal.error }}" hint-placeholder-val="{{ false }}">
+          <div style="background: #FBEDEB; border: 1px solid #EBC9C4; color: #8E2F27; padding: 12px 14px; border-radius: 10px; margin-bottom: 16px; font-size: 13.5px;">{{ modal.error }}</div>
+        </sc-if>
+
+        <div style="font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: #6E7079; margin-bottom: 10px;">Contribution</div>
+        <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px;">
+          <sc-for list="{{ modal.contributions }}" as="c" hint-placeholder-count="5">
+            <button onClick="{{ c.onClick }}" style="display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; background: #FFF; border: 1px solid #D8D6CD; border-radius: 11px; padding: 14px 16px; font-size: 15px;" style-hover="background: #F4F9F6; border-color: #0B6B52;">
+              <span style="flex: 0 0 56px; font-weight: 600; font-variant-numeric: tabular-nums; color: #0B6B52;">{{ c.points }}</span>
+              <span style="flex: 1; min-width: 0;">{{ c.label }}</span>
+            </button>
+          </sc-for>
+        </div>
+
+        <div style="font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: #6E7079; margin-bottom: 10px;">Penalties</div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <sc-for list="{{ modal.penalties }}" as="p" hint-placeholder-count="3">
+            <button onClick="{{ p.onClick }}" style="flex: 1 1 150px; background: #FFF; border: 1px solid #E0BCB6; color: #8E2F27; border-radius: 11px; padding: 13px 14px; font-size: 14.5px; text-align: left;" style-hover="background: #FBEDEB;">
+              <span style="font-weight: 600; font-variant-numeric: tabular-nums;">{{ p.points }}</span> {{ p.label }}
+            </button>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ confirmEnd }}" hint-placeholder-val="{{ false }}">
+    <div style="position: fixed; inset: 0; background: rgba(23,25,28,.42); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 70;">
+      <div style="background: #FFF; border-radius: 16px; padding: 24px; max-width: 420px; width: 100%;">
+        <div style="font-size: 21px; font-weight: 600; margin-bottom: 8px;">End today’s class?</div>
+        <div style="font-size: 14.5px; color: #47505A; line-height: 1.55; margin-bottom: 20px;">All participation records will be saved. New hand raises and CP changes will be blocked until a TA reopens the class.</div>
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+          <button onClick="{{ cancelEnd }}" style="background: #FFF; border: 1px solid #D8D6CD; padding: 11px 16px; border-radius: 9px; font-size: 14.5px;" style-hover="background: #F6F5F1;">Keep class open</button>
+          <button onClick="{{ confirmEndClass }}" style="background: #8E2F27; color: #FFF; border: none; padding: 11px 16px; border-radius: 9px; font-size: 14.5px; font-weight: 600;" style-hover="background: #72251F;">End class</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;$preview&quot;: { &quot;width&quot;: 1440, &quot;height&quot;: 900 },
+  &quot;showRecommendation&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Classroom&quot; },
+  &quot;presenterDetail&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;qualitative&quot;, &quot;numeric&quot;], &quot;default&quot;: &quot;qualitative&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Classroom&quot; }
+}">
+class Component extends DCLogic {
+  state = {
+    ready: false, view: "login", loginRole: "ta", username: "", password: "", loginError: "",
+    user: null, tab: "dashboard", flash: "", flashKind: "info", modal: null, confirmEnd: false,
+    editRows: null, drag: null, tick: 0, warnings: [],
+  };
+
+  componentDidMount() {
+    import("./server.js").then(async (S) => {
+      this.S = S;
+      const cfg = await S.loadConfig();
+      this.unsub = S.subscribe(() => this.forceUpdate());
+      this.timer = setInterval(() => this.setState((s) => ({ tick: s.tick + 1 })), 1000);
+      this.setState({ ready: true, warnings: cfg.warnings });
+    });
+  }
+  componentWillUnmount() { this.unsub && this.unsub(); clearInterval(this.timer); }
+
+  flash(msg, kind) {
+    this.setState({ flash: msg, flashKind: kind || "info" });
+    clearTimeout(this._ft);
+    this._ft = setTimeout(() => this.setState({ flash: "" }), 4200);
+  }
+
+  session() { const S = this.S; const st = S.getState(); return S.todaySession(st) || (st.sessions.slice().sort((a, b) => b.date.localeCompare(a.date))[0] || null); }
+  todaySes() { return this.S.todaySession(); }
+
+  /* ---- login ---- */
+  /* Quick sign in only PRE-FILLS the username and role — it never logs anyone in.
+     The person must still type the password and press Sign in. */
+  quickPick = (role, username) => {
+    this.setState({ loginRole: role, username, password: "", loginError: "" });
+    setTimeout(() => {
+      const el = document.querySelector('input[type=password]');
+      if (el) el.focus();
+    }, 0);
+  };
+
+  submitLogin = () => {
+    const role = this.state.loginRole;
+    const uname = String(this.state.username || "").trim().toLowerCase().replace(/\s+/g, ".");
+    const pass = String(this.state.password || "").trim();
+    const r = this.S.login(role, uname, pass);
+    if (r.error) return this.setState({ loginError: r.error });
+    this.setState({
+      user: r.user, view: r.user.role === "ta" ? "ta" : "student",
+      loginError: "", password: "", tab: "dashboard",
+    });
+  };
+  signOut = () => this.setState({ user: null, view: "login", username: "", password: "", modal: null });
+
+  /* ---- marking ---- */
+  openMark = (studentId, handRaiseId) => {
+    const ses = this.todaySes();
+    if (!ses) return this.flash("Start today's class before recording participation.", "warn");
+    if (ses.status === "CLOSED") return this.flash("Today's class is closed. Reopen it to record participation.", "warn");
+    this.setState({ modal: { studentId, handRaiseId: handRaiseId || null, result: null, error: "" } });
+  };
+
+  award = (key) => {
+    const m = this.state.modal;
+    if (!m) return;
+    const S = this.S, taId = this.state.user.id;
+    let hrId = m.handRaiseId;
+    if (!hrId) {
+      const hands = S.activeHands(this.todaySes().id).filter((h) => h.studentId === m.studentId);
+      if (hands.length) hrId = hands[0].id;
+    }
+    if (!hrId) {
+      /* No live hand: record the contribution against a fresh hand raise so the
+         one-event-per-raise constraint still holds. */
+      const r = S.raiseHand(m.studentId);
+      if (r.error) return this.setState({ modal: { ...m, error: r.error } });
+      hrId = r.handRaiseId;
+    }
+    const res = S.markCp(hrId, key, taId);
+    if (res.error) return this.setState({ modal: { ...m, error: res.error, result: null } });
+    this.setState({ modal: { ...m, handRaiseId: hrId, error: "", result: { prev: res.prev, points: (res.points >= 0 ? "+" : "") + res.points, next: res.next } } });
+    clearTimeout(this._mt);
+    this._mt = setTimeout(() => this.setState((s) => (s.modal ? { modal: null } : {})), 1600);
+  };
+
+  penalise = (key) => {
+    const m = this.state.modal;
+    const res = this.S.applyPenalty(m.studentId, key, this.state.user.id);
+    if (res.error) return this.setState({ modal: { ...m, error: res.error, result: null } });
+    this.setState({ modal: { ...m, error: "", result: { prev: res.prev, points: res.points, next: res.next } } });
+  };
+
+  /* ---- seating editor ---- */
+  editRows() {
+    if (this.state.editRows) return this.state.editRows;
+    return this.S.getState().seating.map((r) => r.slice());
+  }
+  setRows = (rows) => this.setState({ editRows: rows });
+  place = (target, studentId) => {
+    const rows = this.editRows().map((r) => r.map((c) => (c === studentId ? null : c)));
+    if (target) rows[target.r][target.c] = studentId;
+    this.setRows(rows);
+  };
+
+  render_() {}
+
+  renderVals() {
+    const s = this.state;
+    if (!s.ready || !this.S) return { isLogin: true, username: "", password: "", taPassword: "…", studentPassword: "…" };
+    const S = this.S, st = S.getState(), cfg = S.getConfig();
+    const today = this.todaySes();
+    const ses = today || this.session();
+    /* Live dashboard reads only today's session; history/export fall back to the
+       most recent one so a past class can still be reviewed and exported. */
+    const sesId = today ? today.id : null;
+    const exportSesId = today ? today.id : ses ? ses.id : null;
+    const scores = sesId ? S.sessionScores(sesId, st) : {};
+    const queue = sesId && today ? S.fairnessQueue(sesId, st) : [];
+    const rec = queue[0] || null;
+    const marked = new Set(st.handRaises.filter((h) => sesId && h.sessionId === sesId && h.status === "MARKED").map((h) => h.studentId));
+    const handByStudent = {};
+    queue.forEach((q) => { handByStudent[q.studentId] = q; });
+
+    const tabBtn = (id, label) => ({
+      label, onClick: () => this.setState({ tab: id, editRows: null }),
+      style: {
+        background: "none", border: "none", padding: "13px 14px", fontSize: 14,
+        fontWeight: s.tab === id ? 600 : 400, color: s.tab === id ? "#17191C" : "#6E7079",
+        borderBottom: s.tab === id ? "2px solid #0B6B52" : "2px solid transparent",
+      },
+    });
+
+    const v = {
+      isLogin: s.view === "login", isTa: s.view === "ta", isStudent: s.view === "student", isPresenter: s.view === "presenter",
+      /* login */
+      username: s.username, password: s.password, loginError: s.loginError,
+      onUsername: (e) => this.setState({ username: e.target.value }),
+      onPassword: (e) => this.setState({ password: e.target.value }),
+      onLoginKey: (e) => { if (e.key === "Enter") this.submitLogin(); },
+      submitLogin: this.submitLogin,
+      pickTa: () => this.setState({ loginRole: "ta", loginError: "" }),
+      pickStudent: () => this.setState({ loginRole: "student", loginError: "" }),
+      taTabStyle: this.tabStyle(s.loginRole === "ta"), studentTabStyle: this.tabStyle(s.loginRole === "student"),
+      quickTas: cfg.tas.map((t) => ({ name: t.name, onClick: () => this.quickPick("ta", t.username) })),
+      studentOptions: cfg.students.map((x) => ({ name: x.name, username: x.username })),
+      quickStudentValue: "",
+      onQuickStudent: (e) => { if (e.target.value) this.quickPick("student", e.target.value); },
+      hasWarnings: s.warnings.length > 0, warningText: s.warnings.slice(0, 3).join("; "),
+      openPresenter: () => this.setState({ view: "presenter" }),
+      leavePresenter: () => this.setState({ view: s.user ? (s.user.role === "ta" ? "ta" : "student") : "login" }),
+      signOut: this.signOut,
+      /* shared */
+      dateLabel: S.fmtDate((today ? today.date : new Date().toISOString().slice(0, 10))),
+      handsCount: queue.length,
+      flash: s.flash, flashStyle: {
+        margin: "12px 22px 0", padding: "11px 14px", borderRadius: 10, fontSize: 13.5,
+        background: s.flashKind === "warn" ? "#FDF5E4" : s.flashKind === "error" ? "#FBEDEB" : "#EEF6F2",
+        border: "1px solid " + (s.flashKind === "warn" ? "#EDD9A8" : s.flashKind === "error" ? "#EBC9C4" : "#C6E2D5"),
+        color: s.flashKind === "warn" ? "#7A5A12" : s.flashKind === "error" ? "#8E2F27" : "#0B4F3C",
+      },
+      queueEmpty: queue.length === 0,
+      emptyQueueText: !today ? "Class has not started yet." : today.status === "CLOSED" ? "Class has ended." : "No hands raised right now.",
+      hasOthers: queue.length > 1,
+      queueOthers: queue.slice(1).map((q) => ({ ...q, onMark: () => this.openMark(q.studentId, q.handRaiseId) })),
+      recommended: rec ? {
+        ...rec,
+        qualitative: this.props.presenterDetail === "numeric" ? `CP ${rec.score} / 3` : rec.qualitative,
+        onMark: () => this.openMark(rec.studentId, rec.handRaiseId),
+        onSelect: () => { const r = S.selectHand(rec.handRaiseId, s.user ? s.user.id : "ta001"); if (r.error) this.flash(r.error, "error"); else this.flash(`${rec.name} marked as called.`); },
+      } : null,
+      showRec: this.props.showRecommendation !== false,
+      stop: (e) => e.stopPropagation(),
+    };
+
+    /* ---- TA ---- */
+    if (v.isTa) {
+      const vals = Object.values(scores);
+      const partCount = st.cpEvents.filter((e) => e.sessionId === sesId && e.kind === "CONTRIBUTION").map((e) => e.studentId);
+      v.statusLabel = !today ? "Not started" : today.status === "OPEN" ? "Live" : "Closed";
+      v.statusPillStyle = {
+        fontSize: 12, fontWeight: 600, padding: "4px 10px", borderRadius: 999,
+        background: !today ? "#EDECE7" : today.status === "OPEN" ? "#E6F4EE" : "#F1F0EB",
+        color: !today ? "#6E7079" : today.status === "OPEN" ? "#0B6B52" : "#6E7079",
+        border: "1px solid " + (today && today.status === "OPEN" ? "#C6E2D5" : "#E2E0D8"),
+      };
+      v.participatingCount = new Set(partCount).size;
+      v.avgCp = cfg.students.length ? (cfg.students.reduce((a, x) => a + (scores[x.id] || 0), 0) / cfg.students.length).toFixed(2) : "0.00";
+      v.showStart = !today || !today.taIds.includes(s.user.id) || today.status === "CLOSED";
+      v.startLabel = today ? (today.status === "CLOSED" ? "Reopen class" : "Join class") : "Start class";
+      v.startClass = () => {
+        if (today && today.status === "CLOSED") { const r = S.reopenClass(s.user.id); return r.error ? this.flash(r.error, "error") : this.flash("Class reopened."); }
+        const r = S.startOrJoinSession(s.user.id);
+        this.flash(r.joined ? "Joined today's live class." : "Class started — students can raise hands now.");
+      };
+      v.canEnd = !!today && today.status === "OPEN";
+      v.canReopen = !!today && today.status === "CLOSED";
+      v.askEnd = () => this.setState({ confirmEnd: true });
+      v.cancelEnd = () => this.setState({ confirmEnd: false });
+      v.confirmEnd = s.confirmEnd;
+      v.confirmEndClass = () => { const r = S.endClass(s.user.id); this.setState({ confirmEnd: false }); r.error ? this.flash(r.error, "error") : this.flash("Class ended. Records saved — export is still available."); };
+      v.reopen = () => { const r = S.reopenClass(s.user.id); r.error ? this.flash(r.error, "error") : this.flash("Class reopened."); };
+      v.doExport = () => this.exportXlsx(exportSesId);
+      v.taLine = `${s.user.name} · TA`;
+      v.tabs = [tabBtn("dashboard", "Dashboard"), tabBtn("seating", "Seating plan"), tabBtn("history", "History"), tabBtn("audit", "Audit log")];
+      v.tabDashboard = s.tab === "dashboard"; v.tabSeating = s.tab === "seating";
+      v.tabHistory = s.tab === "history"; v.tabAudit = s.tab === "audit";
+      v.sessionTas = (today ? today.taIds : []).map((id) => ({ name: S.taName(id) }));
+
+      v.seatRows = st.seating.map((row, r) => ({
+        cells: row.map((id, c) => {
+          const q = id ? handByStudent[id] : null;
+          const isRec = !!(rec && id && rec.studentId === id);
+          const isSel = !!(q && q.status === "SELECTED");
+          const done = !!(id && marked.has(id));
+          let border = "1px solid #E2E0D8", bg = "#FFF", anim = "none";
+          if (done) { bg = "#EDECE7"; border = "1px solid #C9C7BE"; }
+          if (q) { bg = "#FFF6E8"; border = "2px solid #B4720B"; anim = "cpPulse 2s ease-in-out infinite"; }
+          if (isSel) { bg = "#F1F2FE"; border = "2px solid #3A4BC8"; }
+          if (isRec) { bg = "#EEF6F2"; border = "2px solid #0B6B52"; }
+          return {
+            key: `${r}-${c}`,
+            name: id ? S.studentName(id) : "",
+            meta: id ? `CP ${scores[id] || 0} / 3` : "Empty seat",
+            badge: isRec ? "★ Recommended" : isSel ? "Selected" : q ? "Hand raised" : done ? "Marked" : "",
+            onClick: id ? () => this.openMark(id, q ? q.handRaiseId : null) : () => {},
+            style: {
+              flex: "1 1 0", minWidth: 0, textAlign: "left", display: "flex", flexDirection: "column", gap: 3,
+              padding: "10px 11px", borderRadius: 10, border, background: id ? bg : "#FAF9F6",
+              cursor: id ? "pointer" : "default", minHeight: 74, animation: anim,
+              opacity: id ? 1 : 0.6, transition: "background .15s ease",
+            },
+            nameStyle: { fontSize: 13.5, fontWeight: 600, lineHeight: 1.25, color: id ? "#17191C" : "#B0AEA6", display: "block", minWidth: 0, overflowWrap: "anywhere", wordBreak: "break-word" },
+            metaStyle: { fontSize: 12, color: "#6E7079", fontVariantNumeric: "tabular-nums" },
+            badgeStyle: {
+              fontSize: 11, fontWeight: 600, letterSpacing: ".04em", marginTop: "auto",
+              color: isRec ? "#0B6B52" : isSel ? "#3A4BC8" : q ? "#B4720B" : "#8A8C85",
+            },
+          };
+        }),
+      }));
+
+      v.recentFeed = st.audit.slice(0, 7).map((a) => ({ time: S.fmtTime(a.ts).slice(0, 5), text: `${a.actor} — ${a.action}` }));
+
+      v.historyCount = st.cpEvents.length;
+      v.historyRows = st.cpEvents.slice().sort((a, b) => b.ts.localeCompare(a.ts)).map((e) => ({
+        when: `${S.fmtDate(e.ts).slice(0, 6)} ${S.fmtTime(e.ts).slice(0, 5)}`,
+        student: S.studentName(e.studentId), label: e.typeLabel,
+        points: (e.points >= 0 ? "+" : "") + e.points,
+        pointsStyle: { flex: "0 0 90px", textAlign: "right", fontWeight: 600, fontVariantNumeric: "tabular-nums", color: e.points > 0 ? "#0B6B52" : e.points < 0 ? "#8E2F27" : "#6E7079" },
+        transition: `${e.prevScore} → ${e.newScore}`, ta: S.taName(e.taId),
+      }));
+      v.auditRows = st.audit.map((a) => ({ when: `${S.fmtDate(a.ts).slice(0, 6)} ${S.fmtTime(a.ts)}`, actor: a.actor, action: a.action, detail: a.detail }));
+
+      /* seating editor */
+      const rows = this.editRows();
+      const seated = new Set(rows.flat().filter(Boolean));
+      v.editRows = rows.map((row, r) => ({
+        onRemove: () => this.setRows(rows.filter((_, i) => i !== r)),
+        cells: row.map((id, c) => ({
+          name: id ? S.studentName(id) : "empty",
+          draggable: !!id,
+          onDragStart: () => this.setState({ drag: id }),
+          onDragOver: (e) => e.preventDefault(),
+          onDrop: (e) => { e.preventDefault(); if (s.drag) this.place({ r, c }, s.drag); this.setState({ drag: null }); },
+          style: {
+            flex: "1 1 0", minWidth: 0, padding: "12px 10px", borderRadius: 10, minHeight: 58,
+            fontSize: 13, lineHeight: 1.3, display: "flex", alignItems: "center",
+            border: id ? "1px solid #D8D6CD" : "1px dashed #D8D6CD",
+            background: id ? "#FFF" : "#FAF9F6", color: id ? "#17191C" : "#B0AEA6",
+            cursor: id ? "grab" : "default", minWidth: 0, overflowWrap: "anywhere", wordBreak: "break-word",
+          },
+        })),
+      }));
+      const free = cfg.students.filter((x) => !seated.has(x.id));
+      v.unseated = free.map((x) => ({ name: x.name, onDragStart: () => this.setState({ drag: x.id }) }));
+      v.unseatedCount = free.length;
+      v.addRow = () => this.setRows(rows.concat([Array(rows[0] ? rows[0].length : 7).fill(null)]));
+      v.addSeat = () => this.setRows(rows.map((r) => r.concat([null])));
+      v.removeSeat = () => this.setRows(rows.map((r) => r.slice(0, Math.max(1, r.length - 1))));
+      v.saveSeatingPlan = () => { const r = S.saveSeating(rows, s.user.id); this.setState({ editRows: null }); r.error ? this.flash(r.error, "error") : this.flash("Seating plan saved."); };
+      v.trayDragOver = (e) => e.preventDefault();
+      v.trayDrop = (e) => { e.preventDefault(); if (s.drag) this.place(null, s.drag); this.setState({ drag: null }); };
+    }
+
+    /* ---- student ---- */
+    if (v.isStudent) {
+      const sv = S.studentView(s.user.id, st);
+      const first = s.user.name.split(" ")[0];
+      const recentlyMarked = sv.justMarkedAt && Date.now() - new Date(sv.justMarkedAt).getTime() < 90000;
+      let icon = "🙋", head = "Ready when you are", sub = "Raise your hand when you want to ask a question.";
+      let primaryLabel = "Raise hand", primaryBg = "#0B6B52";
+      if (sv.sessionStatus === "NONE") { icon = "⏳"; head = "Class has not started"; sub = "Your TA will start today's class shortly."; primaryLabel = ""; }
+      else if (sv.sessionStatus === "CLOSED") { icon = "✓"; head = "Class has ended"; sub = "Participation for today is closed."; primaryLabel = ""; }
+      else if (sv.handStatus === "SELECTED") { icon = "🎤"; head = "You’ve been selected"; sub = "Please ask your question."; primaryLabel = ""; }
+      else if (sv.handStatus === "ACTIVE") { icon = "✋"; head = "Hand raised"; sub = "Waiting for the presenter…"; primaryLabel = ""; }
+      else if (recentlyMarked) { icon = "✓"; head = "Participation recorded"; sub = "Your contribution has been logged. You can raise your hand again."; }
+      v.studentFirstName = first;
+      v.studentIcon = icon; v.studentHeadline = head; v.studentSubline = sub;
+      v.studentPrimaryLabel = primaryLabel;
+      v.studentPrimaryStyle = { marginTop: 18, width: "100%", background: primaryBg, color: "#FFF", border: "none", padding: "18px", borderRadius: 12, fontSize: 17, fontWeight: 600 };
+      v.studentPrimary = () => { const r = S.raiseHand(s.user.id); this.setState({ flash: r.error || "" , flashKind: "warn" }); };
+      v.canCancel = sv.handStatus === "ACTIVE";
+      v.cancelHandAction = () => { const r = S.cancelHand(s.user.id); this.setState({ flash: r.error || "", flashKind: "warn" }); };
+      v.studentFlash = s.flash;
+      v.studentCardStyle = {
+        background: "#FFF", border: "1px solid " + (sv.handStatus === "SELECTED" ? "#3A4BC8" : sv.handStatus === "ACTIVE" ? "#B4720B" : "#E2E0D8"),
+        borderRadius: 16, padding: 22, textAlign: "center",
+      };
+      v.myHistory = sv.history;
+      v.noHistory = sv.history.length === 0;
+    }
+
+    /* ---- marking modal ---- */
+    if (s.modal) {
+      const m = s.modal;
+      const q = handByStudent[m.studentId];
+      v.modal = {
+        name: S.studentName(m.studentId),
+        scoreLabel: `${scores[m.studentId] || 0} / 3`,
+        handLabel: m.handRaiseId || (q && q.handRaiseId) ? `Hand raise ${m.handRaiseId || q.handRaiseId}` : "No active hand — will open a new record",
+        result: m.result, error: m.error,
+        contributions: S.CONTRIBUTIONS.map((c) => ({ label: c.label, points: (c.points > 0 ? "+" : "") + c.points, onClick: () => this.award(c.key) })),
+        penalties: S.PENALTIES.map((p) => ({ label: p.label, points: p.points, onClick: () => this.penalise(p.key) })),
+      };
+      v.closeModal = () => { clearTimeout(this._mt); this.setState({ modal: null }); };
+    }
+    return v;
+  }
+
+  tabStyle(active) {
+    return {
+      flex: "1 1 0", padding: "11px 10px", borderRadius: 8, border: "none", fontSize: 13.5,
+      fontWeight: active ? 600 : 400, background: active ? "#FFF" : "transparent",
+      color: active ? "#17191C" : "#6E7079", boxShadow: active ? "0 1px 2px rgba(0,0,0,.06)" : "none",
+    };
+  }
+
+  exportXlsx(sesId) {
+    const S = this.S;
+    if (!sesId) return this.flash("Nothing to export yet.", "warn");
+    const tables = S.exportTables(sesId);
+    const ses = S.getState().sessions.find((x) => x.id === sesId);
+    const base = `CP_${(ses && ses.date) || "session"}`;
+    if (window.XLSX) {
+      const wb = window.XLSX.utils.book_new();
+      tables.forEach((t) => window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.json_to_sheet(t.rows), t.name));
+      window.XLSX.writeFile(wb, `${base}.xlsx`);
+    } else {
+      const csv = tables.map((t) => {
+        const keys = t.rows.length ? Object.keys(t.rows[0]) : [];
+        return [`# ${t.name}`, keys.join(","), ...t.rows.map((r) => keys.map((k) => `"${String(r[k]).replace(/"/g, '""')}"`).join(","))].join("\n");
+      }).join("\n\n");
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+      a.download = `${base}.csv`; a.click();
+    }
+    S.logExport(this.state.user.id, sesId);
+    this.flash("Export generated — 4 sheets written.");
+  }
+}
+
+</script>
+</body>
+</html>
