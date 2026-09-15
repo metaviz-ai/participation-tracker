@@ -453,15 +453,19 @@ class Component extends DCLogic {
   };
 
   componentDidMount() {
-    import("./server.js").then(async (S) => {
+    import("./store.js").then(async (S) => {
       this.S = S;
       const cfg = await S.loadConfig();
       this.unsub = S.subscribe(() => this.forceUpdate());
+      /* A background write that never reached Firestore looks identical to one
+         that did — until the next snapshot silently rolls it back. Say so. */
+      this.unsubErr = S.onPersistError((msg) =>
+        this.flash(`Not saved to the shared database (${msg}). Check your connection, then try again.`, "error"));
       this.timer = setInterval(() => this.setState((s) => ({ tick: s.tick + 1 })), 1000);
       this.setState({ ready: true, warnings: cfg.warnings });
     });
   }
-  componentWillUnmount() { this.unsub && this.unsub(); clearInterval(this.timer); }
+  componentWillUnmount() { this.unsub && this.unsub(); this.unsubErr && this.unsubErr(); clearInterval(this.timer); }
 
   flash(msg, kind) {
     this.setState({ flash: msg, flashKind: kind || "info" });

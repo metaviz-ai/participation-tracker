@@ -26,7 +26,7 @@ Total: ~20 minutes. It's all free at your class's size.
 |---|---|---|
 | `index.html` | The app itself | No |
 | `support.js` | App engine | No |
-| `server.js` | The data logic (already wired to the shared database) | Only to change passwords (Part 6) |
+| `store.js` | The data logic (already wired to the shared database) | Only to change passwords (see *Managing the app*) |
 | **`firebase-config.js`** | **Where you paste your database keys** | **Yes — Part 3** |
 | `config/students.json` | Your student list | To update the roster (Part 7) |
 | `config/tas.json` | Your TA list | To update the TAs (Part 7) |
@@ -149,6 +149,14 @@ service cloud.firestore {
 > **Write down your final link** — e.g. `https://topics-cp.netlify.app`. You'll
 > need it for the next step and to share with the class.
 
+### Using Vercel instead of Netlify
+
+Vercel works too — drag the folder to **https://vercel.com/new**, or import the
+folder as a project. The `vercel.json` file in this folder tells Vercel the app
+is a plain static site with nothing to build, so leave the framework preset as
+**Other** and don't add a build command. Whichever host you use, the domain must
+still be added in **Part 6**.
+
 ---
 
 ## Part 6 — Authorise your link in Firebase  ⚠ don't skip
@@ -179,7 +187,7 @@ Share three things with everyone:
     `ammara.haroon`). It's the person's name in lowercase with a dot — the app
     also accepts the full name and converts it.
   - **Password:**
-    - TAs: `ta2026`
+    - TAs: `@AHIta2026`
     - Students: `cp2026`
 
 Everyone uses the same password for their role. (You can change these — see
@@ -191,10 +199,10 @@ below.)
 
 ### Change the passwords (recommended before the first real class)
 
-1. Open **`server.js`** in a text editor.
+1. Open **`store.js`** in a text editor.
 2. Near the top, find:
    ```js
-   const TA_PASSWORD = "ta2026";
+   const TA_PASSWORD = "@AHIta2026";
    const STUDENT_PASSWORD = "cp2026";
    ```
 3. Change the values (keep the quotes), save.
@@ -222,7 +230,7 @@ To wipe them and start clean:
 2. Press **F12** to open the developer tools, click the **Console** tab.
 3. Paste this and press Enter:
    ```js
-   import('./server.js').then(S => S.resetDemo(false))
+   import('./store.js').then(S => S.resetDemo(false))
    ```
    This resets the shared data to a clean slate for everyone.
    *(Use `S.resetDemo(true)` instead if you ever want the demo data back.)*
@@ -237,6 +245,10 @@ To wipe them and start clean:
   passwords are visible to anyone who really digs into the page. That's normal
   and fine for classroom participation — it keeps casual outsiders out. Don't
   store anything sensitive here.
+- **This guide gets published too.** It sits in the same folder you upload, so
+  anyone can open `https://your-link/SETUP-GUIDE.md` and read the passwords off
+  it. Before you share the link with the class, delete `SETUP-GUIDE.md` from the
+  folder you deploy (keep your own copy elsewhere).
 - **Across a whole term:** data keeps accumulating in one record. It's tiny, but
   at the end of a term it's good practice to **Export** each session to Excel
   (button in the TA console) and then run the reset command above for the new
@@ -256,6 +268,7 @@ To wipe them and start clean:
 | "Could not connect… (permission-denied)" | Re-check the rule in **Part 4** and that **Anonymous** sign-in is enabled (**Part 1c**). |
 | One TA's marks don't show for others | Confirm every device is opening the **same** Netlify link, and the "Setup notice" is gone on each. |
 | Changes I made to files aren't showing | Re-deploy: drag the folder onto your Netlify site's **Deploys** tab again, then refresh (Ctrl/Cmd+Shift+R). |
+| On Vercel: `500 FUNCTION_INVOCATION_FAILED` | The host is treating the app as a Node server instead of a static site. Make sure `vercel.json` is in the folder you upload, that there is **no** `package.json`, and that no file at the top level is named `server.js`, `app.js` or `index.js` (the data file is called `store.js` for exactly this reason). |
 
 If you get stuck on any step, tell me what you see on screen and I'll walk you
 through it.

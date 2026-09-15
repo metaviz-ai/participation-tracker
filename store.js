@@ -59,7 +59,8 @@ const FALLBACK_TAS = [
 
 /* Passwords are NOT in the roster config files. These are shared credentials
    per role — every TA uses the TA password, every student the student one.
-   Change them here before your first real class (see SETUP-GUIDE.md, Part 4).
+   Change them here before your first real class (see SETUP-GUIDE.md, under
+   "Managing the app" → "Change the passwords").
    Note: because the app is fully client-side, these are visible to anyone who
    inspects the page source. They keep casual outsiders out, not determined
    ones — fine for classroom participation, not for secrets. */
@@ -81,6 +82,23 @@ const now = () => new Date().toISOString();
 const todayKey = (d = new Date()) => d.toISOString().slice(0, 10);
 const uid = (p) => p + Math.random().toString(36).slice(2, 8).toUpperCase();
 const clone = (o) => JSON.parse(JSON.stringify(o));
+
+/* Every mutator runs TWICE: once against the local cache (instant UI) and once
+   against the authoritative Firestore document inside persist(). Both runs must
+   produce byte-identical records — if a mutator minted its own random ids or
+   read the clock itself, the two copies would disagree and any follow-up call
+   that refers to a just-created id (e.g. raiseHand → markCp) would fail to find
+   it server-side and silently write nothing.
+
+   So all non-determinism is hoisted here: tx() builds one ctx and hands the
+   SAME ctx to both runs. reset() rewinds the id counter so the second run
+   re-issues the very same sequence. */
+function makeCtx() {
+  const ts = now();
+  const seed = Math.random().toString(36).slice(2, 8).toUpperCase();
+  let n = 0;
+  return { ts, reset: () => { n = 0; }, uid: (p) => `${p}${seed}${n++}` };
+}
 
 export function fmtDate(iso) {
   const d = new Date(iso.length <= 10 ? iso + "T00:00:00" : iso);
@@ -311,13 +329,14 @@ function notify() {
    same change to the shared document in the background. The realtime listener
    reconciles every device — including this one — with the authoritative result. */
 function tx(mutator) {
+  const ctx = makeCtx();                     // one set of ids/timestamps for BOTH runs
   const draft = clone(read());
-  const out = mutator(draft) || {};
+  const out = mutator(draft, ctx) || {};
   if (out.error) return out;                 // validation failed — persist nothing
   draft.rev = (read().rev || 0) + 1;
   cache = draft;
   notify();                                  // optimistic local update
-  persist(mutator);                          // background, reconciled by onSnapshot
+  persist(mutator, ctx);                     // background, reconciled by onSnapshot
   return { ok: true, ...out };
 }
 
@@ -325,7 +344,7 @@ function tx(mutator) {
    transaction, so concurrent edits from multiple TAs merge correctly instead of
    overwriting each other. Fire-and-forget: results reach every device via the
    realtime listener. */
-async function persist(mutator) {
+async function persist(mutator, ctx) {
   if (!fbReady || !stateDocRef || !FS) return;   // local-only fallback
   try {
     await FS.runTransaction(db, async (t) => {
@@ -336,18 +355,33 @@ async function persist(mutator) {
       } else {
         st = seedState(true);
       }
-      const out = mutator(st) || {};
-      if (out.error) return;                 // no longer valid on authoritative state — skip
+      /* Firestore retries this callback on contention, so rewind the id counter
+         here — not outside — or a retry would mint a fresh sequence. */
+      ctx.reset();
+      const out = mutator(st, ctx) || {};
+      if (out.error) return reportPersistError(out.error);
       st.rev = (st.rev || 0) + 1;
       t.set(stateDocRef, { json: JSON.stringify(st), rev: st.rev, updatedAt: Date.now() });
     });
   } catch (e) {
     console.error("[cp] persist failed", e);
+    reportPersistError(e && e.message ? e.message : String(e));
   }
 }
 
-function log(st, actorName, action, detail) {
-  st.audit.unshift({ id: uid("A-"), ts: now(), actor: actorName, action, detail: detail || "" });
+/* A write that never reached Firestore looks identical on screen to one that
+   did — until the next snapshot quietly rolls it back. Surface it instead. */
+let persistErrorHandlers = new Set();
+export function onPersistError(fn) {
+  persistErrorHandlers.add(fn);
+  return () => { persistErrorHandlers.delete(fn); };
+}
+function reportPersistError(msg) {
+  persistErrorHandlers.forEach((f) => { try { f(msg); } catch (e) { console.error(e); } });
+}
+
+function log(st, ctx, actorName, action, detail) {
+  st.audit.unshift({ id: ctx.uid("A-"), ts: ctx.ts, actor: actorName, action, detail: detail || "" });
   if (st.audit.length > 400) st.audit.length = 400;
 }
 
@@ -364,13 +398,13 @@ export function login(role, username, password) {
     const ta = config.tas.find((t) => t.username.toLowerCase() === u);
     if (!ta) return { error: "No TA with that username." };
     if (password !== TA_PASSWORD) return { error: "Incorrect password." };
-    tx((st) => log(st, ta.name, "Login", "Role: TA"));
+    tx((st, c) => log(st, c, ta.name, "Login", "Role: TA"));
     return { ok: true, user: { role: "ta", id: ta.id, name: ta.name, username: ta.username } };
   }
   const s = config.students.find((x) => x.username.toLowerCase() === u);
   if (!s) return { error: "No student with that username." };
   if (password !== STUDENT_PASSWORD) return { error: "Incorrect password." };
-  tx((st) => log(st, s.name, "Login", "Role: Student"));
+  tx((st, c) => log(st, c, s.name, "Login", "Role: Student"));
   return { ok: true, user: { role: "student", id: s.id, name: s.name, username: s.username } };
 }
 
@@ -383,51 +417,51 @@ export function todaySession(st = read()) {
 }
 
 export function startOrJoinSession(taId) {
-  return tx((st) => {
+  return tx((st, c) => {
     const date = todayKey();
     let s = st.sessions.find((x) => x.date === date);
     if (s) {
       if (!s.taIds.includes(taId)) {
         s.taIds.push(taId);
-        log(st, taName(taId), "Joined class", `${s.course} — ${fmtDate(s.date)}`);
+        log(st, c, taName(taId), "Joined class", `${s.course} — ${fmtDate(s.date)}`);
       }
       return { sessionId: s.id, joined: true };
     }
-    s = { id: `SES-${date}`, course: COURSE, date, startedAt: now(), endedAt: null, status: "OPEN", taIds: [taId] };
+    s = { id: `SES-${date}`, course: COURSE, date, startedAt: c.ts, endedAt: null, status: "OPEN", taIds: [taId] };
     st.sessions.push(s);
     st.scores[s.id] = st.scores[s.id] || {};
-    log(st, taName(taId), "Class started", `${s.course} — ${fmtDate(s.date)}`);
+    log(st, c, taName(taId), "Class started", `${s.course} — ${fmtDate(s.date)}`);
     return { sessionId: s.id, joined: false };
   });
 }
 
 export function endClass(taId) {
-  return tx((st) => {
+  return tx((st, c) => {
     const s = todaySession(st);
     if (!s) return { error: "No session today." };
     if (s.status === "CLOSED") return { error: "Class is already closed." };
     s.status = "CLOSED";
-    s.endedAt = now();
+    s.endedAt = c.ts;
     st.handRaises.filter((h) => h.sessionId === s.id && (h.status === "ACTIVE" || h.status === "SELECTED"))
-      .forEach((h) => { h.status = "CANCELLED"; h.cancelledAt = now(); });
-    log(st, taName(taId), "Class ended", `${s.course} — ${fmtDate(s.date)}`);
+      .forEach((h) => { h.status = "CANCELLED"; h.cancelledAt = c.ts; });
+    log(st, c, taName(taId), "Class ended", `${s.course} — ${fmtDate(s.date)}`);
   });
 }
 
 export function reopenClass(taId) {
-  return tx((st) => {
+  return tx((st, c) => {
     const s = todaySession(st);
     if (!s) return { error: "No session today." };
     s.status = "OPEN";
     s.endedAt = null;
-    log(st, taName(taId), "Class reopened", `${s.course} — ${fmtDate(s.date)}`);
+    log(st, c, taName(taId), "Class reopened", `${s.course} — ${fmtDate(s.date)}`);
   });
 }
 
 /* ---------- hand raises ---------- */
 
 export function raiseHand(studentId) {
-  return tx((st) => {
+  return tx((st, c) => {
     const s = todaySession(st);
     if (!s) return { error: "Class has not started yet." };
     if (s.status === "CLOSED") return { error: "Today's class is closed." };
@@ -435,37 +469,39 @@ export function raiseHand(studentId) {
       (h) => h.sessionId === s.id && h.studentId === studentId && (h.status === "ACTIVE" || h.status === "SELECTED")
     );
     if (open) return { error: "Your hand is already raised." };
+    /* The id MUST come from ctx: award() hands this id straight to markCp(), so
+       the local and authoritative copies have to agree on it. */
     const hr = {
-      id: "HR-" + Math.floor(10000 + Math.random() * 89999), sessionId: s.id, studentId,
-      status: "ACTIVE", raisedAt: now(), selectedAt: null, markedAt: null, selectedBy: null, markedBy: null,
+      id: c.uid("HR-"), sessionId: s.id, studentId,
+      status: "ACTIVE", raisedAt: c.ts, selectedAt: null, markedAt: null, selectedBy: null, markedBy: null,
     };
     st.handRaises.push(hr);
-    log(st, studentName(studentId), "Raised hand", hr.id);
+    log(st, c, studentName(studentId), "Raised hand", hr.id);
     return { handRaiseId: hr.id };
   });
 }
 
 export function cancelHand(studentId) {
-  return tx((st) => {
+  return tx((st, c) => {
     const s = todaySession(st);
     const hr = st.handRaises.find((h) => s && h.sessionId === s.id && h.studentId === studentId && h.status === "ACTIVE");
     if (!hr) return { error: "Nothing to lower — you may already have been selected." };
     hr.status = "CANCELLED";
-    hr.cancelledAt = now();
-    log(st, studentName(studentId), "Cancelled hand", hr.id);
+    hr.cancelledAt = c.ts;
+    log(st, c, studentName(studentId), "Cancelled hand", hr.id);
   });
 }
 
 export function selectHand(handRaiseId, taId) {
-  return tx((st) => {
+  return tx((st, c) => {
     const hr = st.handRaises.find((h) => h.id === handRaiseId);
     if (!hr) return { error: "Hand raise not found." };
     if (hr.status === "MARKED") return { error: `Already marked by ${taName(hr.markedBy)}.` };
     if (hr.status === "CANCELLED") return { error: "That hand was lowered." };
     hr.status = "SELECTED";
-    hr.selectedAt = hr.selectedAt || now();
+    hr.selectedAt = hr.selectedAt || c.ts;
     hr.selectedBy = taId;
-    log(st, taName(taId), "Student selected", `${studentName(hr.studentId)} — ${hr.id}`);
+    log(st, c, taName(taId), "Student selected", `${studentName(hr.studentId)} — ${hr.id}`);
   });
 }
 
@@ -474,7 +510,7 @@ export function selectHand(handRaiseId, taId) {
 export function markCp(handRaiseId, contributionKey, taId) {
   const c = CONTRIBUTIONS.find((x) => x.key === contributionKey);
   if (!c) return { error: "Unknown contribution type." };
-  return tx((st) => {
+  return tx((st, ctx) => {
     const hr = st.handRaises.find((h) => h.id === handRaiseId);
     if (!hr) return { error: "Hand raise not found." };
     const s = st.sessions.find((x) => x.id === hr.sessionId);
@@ -488,17 +524,17 @@ export function markCp(handRaiseId, contributionKey, taId) {
     const next = clampScore(prev + c.points);
     st.scores[s.id][hr.studentId] = next;
     hr.status = "MARKED";
-    hr.markedAt = now();
+    hr.markedAt = ctx.ts;
     hr.markedBy = taId;
     hr.selectedAt = hr.selectedAt || hr.markedAt;
     hr.selectedBy = hr.selectedBy || taId;
     const ev = {
-      id: uid("CP-"), sessionId: s.id, studentId: hr.studentId, handRaiseId: hr.id, kind: "CONTRIBUTION",
+      id: ctx.uid("CP-"), sessionId: s.id, studentId: hr.studentId, handRaiseId: hr.id, kind: "CONTRIBUTION",
       typeKey: c.key, typeLabel: c.label, points: c.points, prevScore: prev, newScore: next, taId, ts: hr.markedAt,
     };
     st.cpEvents.push(ev);
-    log(st, taName(taId), `Awarded ${c.points >= 0 ? "+" : ""}${c.points} to ${studentName(hr.studentId)}`,
-      `Reason: ${c.typeLabel || c.label} · Previous CP: ${prev} · New CP: ${next} · Hand Raise: ${hr.id}`);
+    log(st, ctx, taName(taId), `Awarded ${c.points >= 0 ? "+" : ""}${c.points} to ${studentName(hr.studentId)}`,
+      `Reason: ${c.label} · Previous CP: ${prev} · New CP: ${next} · Hand Raise: ${hr.id}`);
     return { prev, points: c.points, next, studentId: hr.studentId };
   });
 }
@@ -506,7 +542,7 @@ export function markCp(handRaiseId, contributionKey, taId) {
 export function applyPenalty(studentId, penaltyKey, taId) {
   const p = PENALTIES.find((x) => x.key === penaltyKey);
   if (!p) return { error: "Unknown penalty." };
-  return tx((st) => {
+  return tx((st, c) => {
     const s = todaySession(st);
     if (!s) return { error: "Class has not started yet." };
     if (s.status === "CLOSED") return { error: "Class is closed — no new CP changes." };
@@ -515,10 +551,10 @@ export function applyPenalty(studentId, penaltyKey, taId) {
     const next = clampScore(prev + p.points);
     st.scores[s.id][studentId] = next;
     st.cpEvents.push({
-      id: uid("CP-"), sessionId: s.id, studentId, handRaiseId: null, kind: "PENALTY",
-      typeKey: p.key, typeLabel: p.label, points: p.points, prevScore: prev, newScore: next, taId, ts: now(),
+      id: c.uid("CP-"), sessionId: s.id, studentId, handRaiseId: null, kind: "PENALTY",
+      typeKey: p.key, typeLabel: p.label, points: p.points, prevScore: prev, newScore: next, taId, ts: c.ts,
     });
-    log(st, taName(taId), `Applied ${p.points} to ${studentName(studentId)}`,
+    log(st, c, taName(taId), `Applied ${p.points} to ${studentName(studentId)}`,
       `Penalty: ${p.label} · Previous CP: ${prev} · New CP: ${next}`);
     return { prev, points: p.points, next, studentId };
   });
@@ -527,14 +563,14 @@ export function applyPenalty(studentId, penaltyKey, taId) {
 /* ---------- seating ---------- */
 
 export function saveSeating(rows, taId) {
-  return tx((st) => {
+  return tx((st, c) => {
     st.seating = rows.map((r) => r.slice());
-    log(st, taName(taId), "Seating plan saved", `${rows.length} rows`);
+    log(st, c, taName(taId), "Seating plan saved", `${rows.length} rows`);
   });
 }
 
 export function logExport(taId, sessionId) {
-  return tx((st) => log(st, taName(taId), "Export generated", sessionId));
+  return tx((st, c) => log(st, c, taName(taId), "Export generated", sessionId));
 }
 
 /* ---------- derived reads ---------- */
@@ -669,9 +705,9 @@ export function exportTables(sessionId, st = read()) {
 /* ---------- admin: reset the shared data ---------- */
 
 /* Wipe the shared document and start over. Runs from the browser console:
-     import("./server.js").then(S => S.resetDemo())        → reset WITH demo history
-     import("./server.js").then(S => S.resetDemo(false))   → clean slate for real use
-   See SETUP-GUIDE.md, Part 5. */
+     import("./store.js").then(S => S.resetDemo())        → reset WITH demo history
+     import("./store.js").then(S => S.resetDemo(false))   → clean slate for real use
+   See SETUP-GUIDE.md, under "Managing the app" → "Clear the demo data". */
 export async function resetDemo(withDemo = true) {
   const fresh = seedState(withDemo);
   cache = fresh;
